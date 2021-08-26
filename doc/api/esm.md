@@ -689,7 +689,7 @@ export async function resolve(specifier, context, defaultResolve) {
 * `defaultLoad` {Function}
 * Returns: {Object}
   * `format` {string}
-  * `source` {string|SharedArrayBuffer|Uint8Array}
+  * `source` {string|ArrayBuffer|SharedArrayBuffer|Uint8Array}
 
 The `load` hook provides a way to define a custom method of determining how
 a URL should be interpreted, retrieved, and parsed.
@@ -734,7 +734,7 @@ format to a supported one, for example `yaml` to `module`.
  * @param {Function} defaultLoad
  * @returns {Promise<{
     format: !string,
-    source: !(string | SharedArrayBuffer | Uint8Array),
+    source: !(string | ArrayBuffer | SharedArrayBuffer | Uint8Array),
   }>}
  */
 export async function load(url, context, defaultLoad) {
