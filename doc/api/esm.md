@@ -10,8 +10,9 @@ changes:
     pr-url: https://github.com/nodejs/node/pull/37468
     description:
       Consolidate loader hooks, removed `getFormat`, `getSource`,
-      `transformSource`, and `getGlobalPreloadCode` hooks and added `load` and
-      `globalPreload` hooks.
+      `transformSource`, and `getGlobalPreloadCode` hooks
+      added `load` and `globalPreload` hooks
+      allowed returning `format` from either `resolve` or `load` hooks.
   - version:
     - v15.3.0
     - v14.17.0
