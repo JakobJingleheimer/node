@@ -844,14 +844,14 @@ export function load(url, context, defaultLoad) {
     return new Promise((resolve, reject) => {
       get(url, (res) => {
         let data = '';
-        res.on('data', chunk => data += chunk);
+        res.on('data', (chunk) => data += chunk);
         res.on('end', () => resolve({
           // This example assumes all network-provided JavaScript is ES module
           // code.
           format: 'module',
           source: data,
         }));
-      }).on('error', err => reject(err));
+      }).on('error', (err) => reject(err));
     });
   }
 
@@ -889,12 +889,12 @@ import { readFile } from 'fs/promises';
 import { readFileSync } from 'fs';
 import { createRequire } from 'module';
 import { dirname, extname, resolve as resolvePath } from 'path';
+import { cwd } from 'process';
 import { fileURLToPath, pathToFileURL } from 'url';
 
 import CoffeeScript from 'coffeescript';
 
-
-const baseURL = pathToFileURL(process.cwd() + '/').href;
+const baseURL = pathToFileURL(`${cwd}/`).href;
 
 // CoffeeScript files end in .coffee, .litcoffee or .coffee.md.
 const extensionsRegex = /\.coffee$|\.litcoffee$|\.coffee\.md$/;
@@ -955,9 +955,9 @@ export async function load(url, context, defaultLoad) {
 
 async function getPackageType(url) {
   const isFile = !!extname(url);
-  const dir = isFile
-    ? dirname(fileURLToPath(url))
-    : url;
+  const dir = isFile ?
+    dirname(fileURLToPath(url)) :
+    url;
   const packagePath = resolvePath(dir, 'package.json');
 
   const type = await readFile(packagePath, { encoding: 'utf8' })
