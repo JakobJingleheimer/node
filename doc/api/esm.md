@@ -690,7 +690,7 @@ export async function resolve(specifier, context, defaultResolve) {
 * `defaultLoad` {Function}
 * Returns: {Object}
   * `format` {string}
-  * `source` {string|ArrayBuffer|SharedArrayBuffer|Uint8Array}
+  * `source` {string|ArrayBuffer|TypedArray}
 
 The `load` hook provides a way to define a custom method of determining how
 a URL should be interpreted, retrieved, and parsed.
