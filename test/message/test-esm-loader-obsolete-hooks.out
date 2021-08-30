@@ -2,7 +2,7 @@ node:internal/process/warning:*
         throw warning;
         ^
 
-DeprecationWarning: Obsolete loader hook(s) supplied: dynamicInstantiate, getFormat, getSource, transformSource
+DeprecationWarning: Obsolete loader hook(s) supplied and will be ignored: dynamicInstantiate, getFormat, getSource, transformSource
     at Function.pluckHooks (node:internal/modules/esm/loader:*:*)
     at ESMLoader.addCustomLoaders (node:internal/modules/esm/loader:*:*)
     at initializeLoader (node:internal/process/esm_loader:*:*)

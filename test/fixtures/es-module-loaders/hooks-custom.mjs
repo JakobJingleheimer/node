@@ -31,7 +31,7 @@ export function load(url, context, next) {
     source: '',
   }
   if (url === 'esmHook/unsupportedReturnFormatVal.mjs') return {
-    format: 'foo', // isn't 1 of 5 node understands
+    format: 'foo', // Not one of the allowable inputs: no translator named 'foo'
     source: '',
   }
 

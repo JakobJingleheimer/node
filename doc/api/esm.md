@@ -773,7 +773,7 @@ source to a supported one (see [Examples](#esm_examples) below).
 
 Sometimes it might be necessary to run some code inside of the same global
 scope that the application runs in. This hook allows the return of a string
-that is run as sloppy-mode script on startup.
+that is run as a sloppy-mode script on startup.
 
 Similar to how CommonJS wrappers work, the code runs in an implicit function
 scope. The only argument is a `require`-like function that can be used to load
