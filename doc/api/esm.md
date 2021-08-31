@@ -697,7 +697,7 @@ a URL should be interpreted, retrieved, and parsed.
 
 The final value of `format` must be one of the following:
 
-| `format`     | Description                    | Acceptable Types For `source` Returned by `resolve` or `load` |
+| `format`     | Description                    | Acceptable types For `source` returned by `resolve` or `load` |
 | ------------ | ------------------------------ | -------------------------------------------------------------------------- |
 | `'builtin'`  | Load a Node.js builtin module  | Not applicable                                                             |
 | `'commonjs'` | Load a Node.js CommonJS module | Not applicable                                                             |
