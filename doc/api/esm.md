@@ -759,7 +759,7 @@ export async function load(url, context, defaultLoad) {
 ```
 
 In a more advanced scenario, this can also be used to transform an unsupported
-source to a supported one (see [Examples](#esm_examples) below).
+source to a supported one (see [Examples](#examples) below).
 
 #### `globalPreload()`
 
@@ -1382,11 +1382,11 @@ success!
 [`package.json`]: packages.md#nodejs-packagejson-field-definitions
 [`process.dlopen`]: process.md#processdlopenmodule-filename-flags
 [`string`]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String
-[`util.TextDecoder`]: util.md#util_class_util_textdecoder
+[`util.TextDecoder`]: util.md#class-utiltextdecoder
 [cjs-module-lexer]: https://github.com/guybedford/cjs-module-lexer/tree/1.2.2
 [custom https loader]: #https-loader
-[load hook]: #esm_load_url_context_defaultload
-[resolve hook]: #esm_resolve_specifier_context_defaultresolve
+[load hook]: #loadurl-context-defaultload
+[resolve hook]: #resolvespecifier-context-defaultresolve
 [special scheme]: https://url.spec.whatwg.org/#special-scheme
 [the official standard format]: https://tc39.github.io/ecma262/#sec-modules
-[url.pathToFileURL]: url.md#url_url_pathtofileurl_path
+[url.pathToFileURL]: url.md#urlpathtofileurlpath
