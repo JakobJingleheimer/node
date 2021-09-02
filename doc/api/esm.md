@@ -705,9 +705,12 @@ The final value of `format` must be one of the following:
 | `'module'`   | Load an ES module              | { [`string`][], [`ArrayBuffer`][], [`TypedArray`][] }                      |
 | `'wasm'`     | Load a WebAssembly module      | { [`ArrayBuffer`][], [`TypedArray`][] }                                    |
 
-> Note: When format is `'commonjs'`, the value of `source` is ignored (due to
-> incompatibilities between internal commonjs and ES modules APIs). This may
-> change in the future.
+The value of `source` is ignored for type `'builtin'` because currently it is
+not possible to replace the value of a Node.js builtin (core) module. The value
+of `source` is ignored for type `'commonjs'` because the CommonJS module loader
+does not provide a mechanism for the ES module loader to override the
+[CommonJS module return value](#commonjs-namespaces). This limitation might be
+overcome in the future.
 
 > **Caveat**: The ESM `load` hook and namespaced exports from CommonJS modules
 > are incompatible. Attempting to use them together will result in an empty
