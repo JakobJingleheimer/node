@@ -962,6 +962,9 @@ async function getPackageType(url) {
   // resolved url from the load() hook
   // an actual file path from load() will contain a file extension as it's
   // required by the spec
+  // this simple truthy check for whether `url` contains a file extension will
+  // work for most projects but does not cover some edge-cases (such as
+  // extension-less files or a url ending in a trailing space)
   const isFilePath = !!extname(url);
   // If it is a file path, get the directory it's in
   const dir = isFilePath ?
