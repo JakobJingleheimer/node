@@ -8,6 +8,10 @@
 added: v8.5.0
 changes:
   - version:
+    - REPLACEME
+    pr-url: https://github.com/nodejs/node/pull/42623
+    description: Add support for chaining loaders.
+  - version:
     - v17.1.0
     - v16.14.0
     pr-url: https://github.com/nodejs/node/pull/40250
@@ -687,12 +691,40 @@ provided via a `--experimental-loader ./loader-name.mjs` argument to Node.js.
 When hooks are used they apply to the entry point and all `import` calls. They
 won't apply to `require` calls; those still follow [CommonJS][] rules.
 
+Loaders follow the pattern of `--require`:
+
+```console
+node \
+  --experimental-loader unpkg \
+  --experimental-loader http-to-https \
+  --experimental-loader cache-buster
+```
+
+These are called in the following sequence: `cache-buster` calls
+`http-to-https` which calls `unpkg`. Or in terms of simple functions,
+`cacheBuster(httpToHttps(unpkg(input)))`.
+
 ### Hooks
 
-#### `resolve(specifier, context, defaultResolve)`
+Hooks are part of a chain, even if that chain consists of only 1 custom
+(user-provided) hook and the default hook (which is always present). Hook
+functions nest: each one must always return a plain object, and chaining happens
+as a result of each function calling `next()`, which is a reference to the
+subsequent loader’s hook.
+
+A hook that fails to return triggers an exception. A hook that returns without
+calling `next()` and without returning `shortCircuit: true` also triggers an
+exception. These errors are to help prevent unintentional breaks in the chain
+(which in our experience, was very easy to do and lead to confusing results).
+
+#### `resolve(specifier, context, next)`
 
 <!-- YAML
 changes:
+  - version:
+    - REPLACEME
+    pr-url: https://github.com/nodejs/node/pull/42623
+    description: Add support for chaining loaders.
   - version:
     - v17.1.0
     - v16.14.0
@@ -705,26 +737,41 @@ changes:
 
 * `specifier` {string}
 * `context` {Object}
-  * `conditions` {string\[]}
+  * `conditions` {string\[]} Export conditions of the relevant `package.json`
   * `importAssertions` {Object}
-  * `parentURL` {string|undefined}
-* `defaultResolve` {Function} The Node.js default resolver.
+  * `parentURL` {string|undefined} The module importing this one, or null if
+    this is the Node.js entry point
+* `next` {Function} The subsequent `resolve` hook in the chain, or the Node.js
+  default `resolve` hook after the last user-supplied `resolve` hook
+  * `specifier` {string}
+  * `context` {Object}
 * Returns: {Object}
-  * `format` {string|null|undefined}
+  * `format` {string|null|undefined} A hint to the load hook (it might be
+    ignored)
     `'builtin' | 'commonjs' | 'json' | 'module' | 'wasm'`
-  * `url` {string} The absolute url to the import target (such as `file://…`)
+  * `shortCircuit` {undefinded|true} A signal that this hook intends to
+    terminate the chain of `resolve` hooks
+  * `url` {string} The absolute URL to which this input resolves
 
-The `resolve` hook returns the resolved file URL for a given module specifier
-and parent URL, and optionally its format (such as `'module'`) as a hint to the
-`load` hook. If a format is specified, the `load` hook is ultimately responsible
-for providing the final `format` value (and it is free to ignore the hint
-provided by `resolve`); if `resolve` provides a `format`, a custom `load`
-hook is required even if only to pass the value to the Node.js default `load`
-hook.
+The `resolve` hook chain is responsible for resolving file URL for a given
+module specifier and parent URL, and optionally its format (such as `'module'`)
+as a hint to the `load` hook. If a format is specified, the `load` hook is
+ultimately responsible for providing the final `format` value (and it is free to
+ignore the hint provided by `resolve`); if `resolve` provides a `format`, a
+custom `load` hook is required even if only to pass the value to the Node.js
+default `load` hook.
 
 The module specifier is the string in an `import` statement or
-`import()` expression, and the parent URL is the URL of the module that imported
-this one, or `undefined` if this is the main entry point for the application.
+`import()` expression (colloquially called "import path"):
+
+```mjs
+import foo from 'module specifier';
+
+const bar = await import('module specifier');
+```
+
+The parent URL is the URL of the module that imported this one, or `undefined`
+if this is the main entry point for the application.
 
 The `conditions` property in `context` is an array of conditions for
 [package exports conditions][Conditional Exports] that apply to this resolution
@@ -733,41 +780,36 @@ modify the list when calling the default resolution logic.
 
 The current [package exports conditions][Conditional Exports] are always in
 the `context.conditions` array passed into the hook. To guarantee _default
-Node.js module specifier resolution behavior_ when calling `defaultResolve`, the
-`context.conditions` array passed to it _must_ include _all_ elements of the
+Node.js module specifier resolution behavior_ Node.js’s `defaultResolve` _must_
+the `context.conditions` array passed to it include _all_ elements of the
 `context.conditions` array originally passed into the `resolve` hook.
 
 ```js
-/**
- * @param {string} specifier
- * @param {{
- *   conditions: string[],
- *   parentURL: string | undefined,
- * }} context
- * @param {Function} defaultResolve
- * @returns {Promise<{ url: string }>}
- */
-export async function resolve(specifier, context, defaultResolve) {
+export async function resolve(specifier, context, next) {
   const { parentURL = null } = context;
+
   if (Math.random() > 0.5) { // Some condition.
     // For some or all specifiers, do some custom logic for resolving.
     // Always return an object of the form {url: <string>}.
     return {
+      shortCircuit: true,
       url: parentURL ?
         new URL(specifier, parentURL).href :
         new URL(specifier).href,
     };
   }
+
   if (Math.random() < 0.5) { // Another condition.
     // When calling `defaultResolve`, the arguments can be modified. In this
     // case it's adding another value for matching conditional exports.
-    return defaultResolve(specifier, {
+    return next(specifier, {
       ...context,
       conditions: [...context.conditions, 'another-condition'],
     });
   }
-  // Defer to Node.js for all other specifiers.
-  return defaultResolve(specifier, context, defaultResolve);
+
+  // Defer to the next hook in the chain.
+  return next(specifier, context);
 }
 ```
 
@@ -779,15 +821,21 @@ export async function resolve(specifier, context, defaultResolve) {
 > In a previous version of this API, this was split across 3 separate, now
 > deprecated, hooks (`getFormat`, `getSource`, and `transformSource`).
 
-* `url` {string}
+* `resolvedUrl` {string} The URL returned by the `resolve` chain
 * `context` {Object}
+  * `conditions` {string\[]} Export conditions of the relevant `package.json`
   * `format` {string|null|undefined} The format optionally supplied by the
-    `resolve` hook.
+    `resolve` hook chain
   * `importAssertions` {Object}
-* `defaultLoad` {Function}
+* `next` {Function} The subsequent `load` hook in the chain, or the Node.js
+  default `load` hook after the last user-supplied `load` hook
+  * `specifier` {string}
+  * `context` {Object}
 * Returns: {Object}
   * `format` {string}
-  * `source` {string|ArrayBuffer|TypedArray}
+  * `shortCircuit` {undefinded|true} A signal that this hook intends to
+    terminate the chain of `resolve` hooks
+  * `source` {string|ArrayBuffer|TypedArray} The source for Node.js to evaluate
 
 The `load` hook provides a way to define a custom method of determining how
 a URL should be interpreted, retrieved, and parsed. It is also in charge of
@@ -828,34 +876,25 @@ avoid reading files from disk. It could also be used to map an unrecognized
 format to a supported one, for example `yaml` to `module`.
 
 ```js
-/**
- * @param {string} url
- * @param {{
-    format: string,
-  }} context If resolve settled with a `format`, that value is included here.
- * @param {Function} defaultLoad
- * @returns {Promise<{
-    format: string,
-    source: string | ArrayBuffer | SharedArrayBuffer | Uint8Array,
-  }>}
- */
-export async function load(url, context, defaultLoad) {
+export async function load(url, context, next) {
   const { format } = context;
-  if (Math.random() > 0.5) { // Some condition.
-    /*
-      For some or all URLs, do some custom logic for retrieving the source.
-      Always return an object of the form {
-        format: <string>,
-        source: <string|buffer>,
-      }.
-    */
-    return {
-      format,
-      source: '...',
-    };
+
+  if (Math.random() < 0.5) { // Some condition
+    // Defer to the next hook in the chain.
+    return next(url, context);
   }
-  // Defer to Node.js for all other URLs.
-  return defaultLoad(url, context, defaultLoad);
+  /*
+    For some or all URLs, do some custom logic for retrieving the source.
+    Always return an object of the form {
+      format: <string>,
+      source: <string|buffer>,
+    }.
+  */
+  return {
+    format,
+    shortCircuit: true,
+    source: '...',
+  };
 }
 ```
 
@@ -870,7 +909,9 @@ source to a supported one (see [Examples](#examples) below).
 > In a previous version of this API, this hook was named
 > `getGlobalPreloadCode`.
 
-* Returns: {string}
+* `utilities` {Object} Things that preload code might find useful
+  * `port` {MessagePort}
+* Returns: {string} Code to run before application startup
 
 Sometimes it might be necessary to run some code inside of the same global
 scope that the application runs in. This hook allows the return of a string
@@ -884,12 +925,6 @@ If the code needs more advanced `require` features, it has to construct
 its own `require` using  `module.createRequire()`.
 
 ```js
-/**
- * @param {{
-     port: MessagePort,
-   }} utilities Things that preload code might find useful
- * @returns {string} Code to run before application startup
- */
 export function globalPreload(utilities) {
   return `\
 globalThis.someInjectedProperty = 42;
@@ -915,10 +950,6 @@ close normally.
 /**
  * This example has the application context send a message to the loader
  * and sends the message back to the application context
- * @param {{
-     port: MessagePort,
-   }} utilities Things that preload code might find useful
- * @returns {string} Code to run before application startup
  */
 export function globalPreload({ port }) {
   port.onmessage = (evt) => {
@@ -940,71 +971,7 @@ customizations of Node.js’ code loading and evaluation behaviors.
 
 #### HTTPS loader
 
-In current Node.js, specifiers starting with `https://` are unsupported. The
-loader below registers hooks to enable rudimentary support for such specifiers.
-While this may seem like a significant improvement to Node.js core
-functionality, there are substantial downsides to actually using this loader:
-performance is much slower than loading files from disk, there is no caching,
-and there is no security.
-
-```js
-// https-loader.mjs
-import { get } from 'https';
-
-export function resolve(specifier, context, defaultResolve) {
-  const { parentURL = null } = context;
-
-  // Normally Node.js would error on specifiers starting with 'https://', so
-  // this hook intercepts them and converts them into absolute URLs to be
-  // passed along to the later hooks below.
-  if (specifier.startsWith('https://')) {
-    return {
-      url: specifier
-    };
-  } else if (parentURL && parentURL.startsWith('https://')) {
-    return {
-      url: new URL(specifier, parentURL).href
-    };
-  }
-
-  // Let Node.js handle all other specifiers.
-  return defaultResolve(specifier, context, defaultResolve);
-}
-
-export function load(url, context, defaultLoad) {
-  // For JavaScript to be loaded over the network, we need to fetch and
-  // return it.
-  if (url.startsWith('https://')) {
-    return new Promise((resolve, reject) => {
-      get(url, (res) => {
-        let data = '';
-        res.on('data', (chunk) => data += chunk);
-        res.on('end', () => resolve({
-          // This example assumes all network-provided JavaScript is ES module
-          // code.
-          format: 'module',
-          source: data,
-        }));
-      }).on('error', (err) => reject(err));
-    });
-  }
-
-  // Let Node.js handle all other URLs.
-  return defaultLoad(url, context, defaultLoad);
-}
-```
-
-```js
-// main.mjs
-import { VERSION } from 'https://coffeescript.org/browser-compiler-modern/coffeescript.js';
-
-console.log(VERSION);
-```
-
-With the preceding loader, running
-`node --experimental-loader ./https-loader.mjs ./main.mjs`
-prints the current version of CoffeeScript per the module at the URL in
-`main.mjs`.
+Node.js now has experimental support for this. See [HTTPS and HTTP imports][].
 
 #### Transpiler loader
 
@@ -1030,58 +997,61 @@ const baseURL = pathToFileURL(`${cwd()}/`).href;
 // CoffeeScript files end in .coffee, .litcoffee or .coffee.md.
 const extensionsRegex = /\.coffee$|\.litcoffee$|\.coffee\.md$/;
 
-export async function resolve(specifier, context, defaultResolve) {
+export async function resolve(specifier, context, next) {
+  // When it's not CoffeeScript, defer to another resolve hook.
+  if (extensionsRegex.test(specifier)) return next(specifier, context);
+
   const { parentURL = baseURL } = context;
 
   // Node.js normally errors on unknown file extensions, so return a URL for
   // specifiers ending in the CoffeeScript file extensions.
-  if (extensionsRegex.test(specifier)) {
-    return {
-      url: new URL(specifier, parentURL).href
-    };
-  }
-
-  // Let Node.js handle all other specifiers.
-  return defaultResolve(specifier, context, defaultResolve);
+  return {
+    shortCircuit: true,
+    url: new URL(specifier, parentURL).href
+  };
 }
 
-export async function load(url, context, defaultLoad) {
+export async function load(url, context, next) {
+  // When it's not CoffeeScript, defer to another load hook.
+  if (!extensionsRegex.test(url)) return next(url, context);
+
   // Now that we patched resolve to let CoffeeScript URLs through, we need to
   // tell Node.js what format such URLs should be interpreted as. Because
   // CoffeeScript transpiles into JavaScript, it should be one of the two
   // JavaScript formats: 'commonjs' or 'module'.
-  if (extensionsRegex.test(url)) {
-    // CoffeeScript files can be either CommonJS or ES modules, so we want any
-    // CoffeeScript file to be treated by Node.js the same as a .js file at the
-    // same location. To determine how Node.js would interpret an arbitrary .js
-    // file, search up the file system for the nearest parent package.json file
-    // and read its "type" field.
-    const format = await getPackageType(url);
-    // When a hook returns a format of 'commonjs', `source` is be ignored.
-    // To handle CommonJS files, a handler needs to be registered with
-    // `require.extensions` in order to process the files with the CommonJS
-    // loader. Avoiding the need for a separate CommonJS handler is a future
-    // enhancement planned for ES module loaders.
-    if (format === 'commonjs') {
-      return { format };
-    }
 
-    const { source: rawSource } = await defaultLoad(url, { format });
-    // This hook converts CoffeeScript source code into JavaScript source code
-    // for all imported CoffeeScript files.
-    const transformedSource = CoffeeScript.compile(rawSource.toString(), {
-      bare: true,
-      filename: url,
-    });
-
+  // CoffeeScript files can be either CommonJS or ES modules, so we want any
+  // CoffeeScript file to be treated by Node.js the same as a .js file at the
+  // same location. To determine how Node.js would interpret an arbitrary .js
+  // file, search up the file system for the nearest parent package.json file
+  // and read its "type" field.
+  const format = await getPackageType(url);
+  // When a hook returns a format of 'commonjs', `source` is be ignored.
+  // To handle CommonJS files, a handler needs to be registered with
+  // `require.extensions` in order to process the files with the CommonJS
+  // loader. Avoiding the need for a separate CommonJS handler is a future
+  // enhancement planned for ES module loaders.
+  if (format === 'commonjs') {
     return {
       format,
-      source: transformedSource,
+      shortCircuit: true,
+      source: '',
     };
   }
 
-  // Let Node.js handle all other URLs.
-  return defaultLoad(url, context, defaultLoad);
+  const { source: rawSource } = await next(url, { ...context, format });
+  // This hook converts CoffeeScript source code into JavaScript source code
+  // for all imported CoffeeScript files.
+  const transformedSource = CoffeeScript.compile(rawSource.toString(), {
+    bare: true,
+    filename: url,
+  });
+
+  return {
+    format,
+    shortCircuit: true,
+    source: transformedSource,
+  };
 }
 
 async function getPackageType(url) {
@@ -1489,6 +1459,7 @@ success!
 [Determining module system]: packages.md#determining-module-system
 [Dynamic `import()`]: https://wiki.developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import#Dynamic_Imports
 [ES Module Integration Proposal for WebAssembly]: https://github.com/webassembly/esm-integration
+[HTTPS and HTTP imports]: #https-and--http-imports
 [Import Assertions]: #import-assertions
 [Import Assertions proposal]: https://github.com/tc39/proposal-import-assertions
 [JSON modules]: #json-modules
