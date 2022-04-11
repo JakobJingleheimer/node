@@ -706,16 +706,15 @@ These are called in the following sequence: `cache-buster` calls
 
 ### Hooks
 
-Hooks are part of a chain, even if that chain consists of only 1 custom
-(user-provided) hook and the default hook (which is always present). Hook
+Hooks are part of a chain, even if that chain consists of only one custom
+(user-provided) hook and the default hook, which is always present. Hook
 functions nest: each one must always return a plain object, and chaining happens
 as a result of each function calling `next()`, which is a reference to the
 subsequent loader’s hook.
 
 A hook that fails to return triggers an exception. A hook that returns without
 calling `next()` and without returning `shortCircuit: true` also triggers an
-exception. These errors are to help prevent unintentional breaks in the chain
-(which in our experience, was very easy to do and lead to confusing results).
+exception. These errors are to help prevent unintentional breaks in the chain.
 
 #### `resolve(specifier, context, next)`
 
@@ -739,7 +738,7 @@ changes:
 * `context` {Object}
   * `conditions` {string\[]} Export conditions of the relevant `package.json`
   * `importAssertions` {Object}
-  * `parentURL` {string|undefined} The module importing this one, or null if
+  * `parentURL` {string|undefined} The module importing this one, or undefined if
     this is the Node.js entry point
 * `next` {Function} The subsequent `resolve` hook in the chain, or the Node.js
   default `resolve` hook after the last user-supplied `resolve` hook
@@ -749,7 +748,7 @@ changes:
   * `format` {string|null|undefined} A hint to the load hook (it might be
     ignored)
     `'builtin' | 'commonjs' | 'json' | 'module' | 'wasm'`
-  * `shortCircuit` {undefinded|true} A signal that this hook intends to
+  * `shortCircuit` {undefined|true} A signal that this hook intends to
     terminate the chain of `resolve` hooks
   * `url` {string} The absolute URL to which this input resolves
 
@@ -762,7 +761,7 @@ custom `load` hook is required even if only to pass the value to the Node.js
 default `load` hook.
 
 The module specifier is the string in an `import` statement or
-`import()` expression (colloquially called "import path"):
+`import()` expression:
 
 ```mjs
 import foo from 'module specifier';
@@ -780,8 +779,8 @@ modify the list when calling the default resolution logic.
 
 The current [package exports conditions][Conditional Exports] are always in
 the `context.conditions` array passed into the hook. To guarantee _default
-Node.js module specifier resolution behavior_ Node.js’s `defaultResolve` _must_
-the `context.conditions` array passed to it include _all_ elements of the
+Node.js module specifier resolution behavior_ when calling `defaultResolve`, the
+`context.conditions` array passed to it _must_ include _all_ elements of the
 `context.conditions` array originally passed into the `resolve` hook.
 
 ```js
@@ -808,7 +807,8 @@ export async function resolve(specifier, context, next) {
     });
   }
 
-  // Defer to the next hook in the chain.
+  // Defer to the next hook in the chain, which would be the
+  // Node.js default resolve if this is the last user-specified loader.
   return next(specifier, context);
 }
 ```
@@ -821,7 +821,7 @@ export async function resolve(specifier, context, next) {
 > In a previous version of this API, this was split across 3 separate, now
 > deprecated, hooks (`getFormat`, `getSource`, and `transformSource`).
 
-* `resolvedUrl` {string} The URL returned by the `resolve` chain
+* `url` {string} The URL returned by the `resolve` chain
 * `context` {Object}
   * `conditions` {string\[]} Export conditions of the relevant `package.json`
   * `format` {string|null|undefined} The format optionally supplied by the
@@ -909,7 +909,7 @@ source to a supported one (see [Examples](#examples) below).
 > In a previous version of this API, this hook was named
 > `getGlobalPreloadCode`.
 
-* `utilities` {Object} Things that preload code might find useful
+* `context` {Object} Information to assist the preload code
   * `port` {MessagePort}
 * Returns: {string} Code to run before application startup
 

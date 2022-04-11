@@ -2090,7 +2090,7 @@ for more information.
 ### `ERR_LOADER_CHAIN_INCOMPLETE`
 
 An ESM loader hook returned without calling `next()` and without explicitly
-signally a short-circuit.
+signaling a short circuit.
 
 <a id="ERR_MANIFEST_ASSERT_INTEGRITY"></a>
 
