@@ -60,16 +60,16 @@ const { ESMLoader } = esmLoaderModule;
     };
   }
 
-  const customLoader = new Map([
-    [
-      'node:test/es-module/test-esm-loader-hooks.mjs',
-      {
+  const customLoader = [
+    {
+      exports: {
         // Ensure ESMLoader actually calls the custom hooks
         resolve: mustCall(resolve),
         load: mustCall(load),
       },
-    ],
-  ]);
+      url: 'node:test/es-module/test-esm-loader-hooks.mjs',
+    },
+  ];
 
   esmLoader.addCustomLoaders(customLoader);
 
