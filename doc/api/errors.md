@@ -2089,6 +2089,10 @@ for more information.
 
 ### `ERR_LOADER_CHAIN_INCOMPLETE`
 
+<!-- YAML
+added: REPLACEME
+-->
+
 An ESM loader hook returned without calling `next()` and without explicitly
 signaling a short circuit.
 
