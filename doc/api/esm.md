@@ -749,7 +749,7 @@ changes:
     ignored)
     `'builtin' | 'commonjs' | 'json' | 'module' | 'wasm'`
   * `shortCircuit` {undefined|boolean} A signal that this hook intends to
-    terminate the chain of `resolve` hooks
+    terminate the chain of `resolve` hooks. **Default:** `false`
   * `url` {string} The absolute URL to which this input resolves
 
 The `resolve` hook chain is responsible for resolving file URL for a given
@@ -828,7 +828,7 @@ export async function resolve(specifier, context, next) {
 * Returns: {Object}
   * `format` {string}
   * `shortCircuit` {undefined|boolean} A signal that this hook intends to
-    terminate the chain of `resolve` hooks
+    terminate the chain of `resolve` hooks. **Default:** `false`
   * `source` {string|ArrayBuffer|TypedArray} The source for Node.js to evaluate
 
 The `load` hook provides a way to define a custom method of determining how
