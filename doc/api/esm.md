@@ -701,8 +701,7 @@ node \
 ```
 
 These are called in the following sequence: `cache-buster` calls
-`http-to-https` which calls `unpkg`. Or in terms of simple functions,
-`cacheBuster(httpToHttps(unpkg(input)))`.
+`http-to-https` which calls `unpkg`.
 
 ### Hooks
 
