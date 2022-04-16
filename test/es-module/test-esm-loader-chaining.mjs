@@ -3,24 +3,29 @@ import fixtures from '../common/fixtures.js';
 import assert from 'node:assert';
 import { spawnSync } from 'node:child_process';
 
-const commonArgs = [
+const setupArgs = [
   '--no-warnings',
   '--input-type=module',
   '-e',
-  'import fs from "node:fs"; console.log(fs)',
+];
+const commonInput = 'import fs from "node:fs"; console.log(fs)';
+const commonArgs = [
+  ...setupArgs,
+  commonInput,
 ];
 
 { // Verify unadulterated source is loaded when there are no loaders
   const { status, stdout } = spawnSync(
     process.execPath,
     [
-      ...commonArgs,
+      ...setupArgs,
+      'import fs from "node:fs"; console.log(typeof fs?.constants?.F_OK )',
     ],
     { encoding: 'utf8' },
   );
 
   assert.strictEqual(status, 0);
-  assert.match(stdout[0], /\{/); // node:fs is an object
+  assert.match(stdout, /number/); // node:fs is an object
 }
 
 { // Verify loaded source is properly different when only load changes something
