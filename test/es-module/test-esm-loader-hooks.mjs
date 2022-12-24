@@ -71,10 +71,10 @@ const { ESMLoader } = esmLoaderModule;
     },
   ];
 
-  esmLoader.addCustomLoaders(customLoader);
+  esmLoader.registerCustomLoaders(customLoader);
 
   // Manually trigger hooks (since ESMLoader is not actually running)
-  const job = await esmLoader.getModuleJob(
+  const job = esmLoader.getModuleJob(
     originalSpecifier,
     parentURL,
     importAssertions,
