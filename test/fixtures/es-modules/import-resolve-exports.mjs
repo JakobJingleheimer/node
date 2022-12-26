@@ -1,10 +1,9 @@
 import { strictEqual } from 'assert';
 
-(async () => {
-  const resolved = await import.meta.resolve('pkgexports-sugar');
+try {
+  const resolved = import.meta.resolve('pkgexports-sugar');
   strictEqual(typeof resolved, 'string');
-})()
-.catch((e) => {
+} catch(e) {
   console.error(e);
   process.exit(1);
-});
+}
