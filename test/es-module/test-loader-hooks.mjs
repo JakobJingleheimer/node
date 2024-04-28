@@ -1,9 +1,12 @@
 // Flags: --expose-internals
 
-import '../common/index.mjs'
+import '../common/index.mjs';
+import fixtures from '../common/fixtures.js';
 
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import { describe, it, mock } from 'node:test';
+import { pathToFileURL } from 'node:url';
 
 import hooksModule from 'internal/modules/esm/hooks';
 
@@ -21,6 +24,45 @@ describe('Loader Hooks', { concurrency: !process.env.TEST_PARALLEL }, () => {
 
   describe('Hooks', { concurrency: !process.env.TEST_PARALLEL }, () => {
     it.todo('should initialise with default hooks');
+
+    describe.todo('addCustomLoader()', () => {
+      it('should call `initialize` hook when provided', () => {
+        const initData = {};
+        const hooks = new Hooks();
+        const spy = mock.fn();
+
+        hooks.addCustomLoader('file:///test/foo.mjs', { initialize: spy }, initData);
+
+        assert.equal(spy.mock.calls[0].arguments[0], initData);
+      });
+    });
+
+    describe('register()', () => {
+      it('should pluck hooks & add them to chains', async () => {
+        const regSpecifier = pathToFileURL(
+          path.resolve(fixtures.path('/es-module-loaders/loader-resolve-42.mjs'))
+        ).href;
+        const regData = { foo: 'bar' };
+        const hooks = new Hooks();
+
+        const spy = mock.method(hooks, 'addCustomLoader');
+
+        await hooks.register(regSpecifier, 'test/main.mjs', regData);
+
+        const {
+          0: specifierArg,
+          // 1: keyedExportsArg,
+          2: dataArg,
+        } = spy.mock.calls[0].arguments;
+
+        assert.equal(specifierArg, regSpecifier);
+        assert.equal(dataArg, regData);
+      });
+    });
+
+    describe('resolve()', () => {});
+
+    describe('load()', () => {});
   });
 
   describe('Chain', { concurrency: !process.env.TEST_PARALLEL }, () => {
