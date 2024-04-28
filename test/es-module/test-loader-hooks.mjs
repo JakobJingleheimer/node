@@ -25,15 +25,37 @@ describe('Loader Hooks', { concurrency: !process.env.TEST_PARALLEL }, () => {
   describe('Hooks', { concurrency: !process.env.TEST_PARALLEL }, () => {
     it.todo('should initialise with default hooks');
 
-    describe.todo('addCustomLoader()', () => {
-      it('should call `initialize` hook when provided', () => {
+    describe('addCustomLoader()', () => {
+      const parentURL = 'file:///test/main.mjs';
+
+      it('should call `initialize` hook when provided', async () => {
         const initData = {};
         const hooks = new Hooks();
         const spy = mock.fn();
 
-        hooks.addCustomLoader('file:///test/foo.mjs', { initialize: spy }, initData);
+        await hooks.addCustomLoader(parentURL, { initialize: spy }, initData);
 
         assert.equal(spy.mock.calls[0].arguments[0], initData);
+      });
+
+      // chains are not publically exposed, so verifying they've been added can be done only
+      // downstream
+      it('should add hooks to their chains', async () => {
+        const targetSpecifier = 'file:///test/foo.mjs';
+        const spies = {
+          resolve: mock.fn(() => ({ shortCircuit: true, url: targetSpecifier })),
+          load: mock.fn(() => ({ format: 'module', shortCircuit: true, source: '' })),
+        };
+
+        const hooks = new Hooks();
+
+        await hooks.addCustomLoader('file:///test/spies.mjs', spies);
+
+        await hooks.resolve(targetSpecifier, parentURL);
+        assert.equal(spies.resolve.mock.callCount(), 1);
+
+        await hooks.load(targetSpecifier);
+        assert.equal(spies.load.mock.callCount(), 1);
       });
     });
 
