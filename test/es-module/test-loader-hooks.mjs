@@ -3,7 +3,7 @@
 import '../common/index.mjs'
 
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it, mock } from 'node:test';
 
 import hooksModule from 'internal/modules/esm/hooks';
 
@@ -11,19 +11,19 @@ import hooksModule from 'internal/modules/esm/hooks';
 const { Chain, Hook, Hooks } = hooksModule;
 
 describe('Loader Hooks', { concurrency: !process.env.TEST_PARALLEL }, () => {
+  const type = 'resolve';
+  function firstResolve() { return {} }
+  const urlResolve1 = 'test/resolve/1';
+  function secondResolve() {}
+  const urlResolve2 = 'test/resolve/2';
+  function thirdResolve() {}
+  const urlResolve3 = 'test/resolve/3';
+
   describe('Hooks', { concurrency: !process.env.TEST_PARALLEL }, () => {
     it.todo('should initialise with default hooks');
   });
 
   describe('Chain', { concurrency: !process.env.TEST_PARALLEL }, () => {
-    const type = 'resolve';
-    function firstResolve() {}
-    const urlResolve1 = 'test/resolve/1';
-    function secondResolve() {}
-    const urlResolve2 = 'test/resolve/2';
-    function thirdResolve() {}
-    const urlResolve3 = 'test/resolve/3';
-
     it('should instantiate with provided options', () => {
       const chain = new Chain(type, () => {}, {
         fn: firstResolve,
@@ -99,6 +99,96 @@ describe('Loader Hooks', { concurrency: !process.env.TEST_PARALLEL }, () => {
 
         assert.equal(chain.end.next.next.fn, firstResolve);
         assert.equal(chain.end.next.next.prev.fn, secondResolve);
+      });
+    });
+  });
+
+  describe('Hook', { concurrency: !process.env.TEST_PARALLEL }, () => {
+    it('should instantiate with supplied config', () => {
+      const hook = new Hook(firstResolve, { type, url: urlResolve1 });
+
+      assert.equal(hook.fn, firstResolve);
+      assert.equal(hook.errIdentifier, `${urlResolve1} 'nextResolve' hook`);
+      assert.equal(hook.type, type);
+    });
+
+    describe('run()', () => {
+      function mock_validateArgs(errId) {
+        throw new Error(`${errId} provided invalid 'context'`);
+      }
+
+      it('should NOT try to validate `context` when there is no previous hook', async () => {
+        const validateArgs = mock.fn(mock_validateArgs);
+        const hook = new Hook(firstResolve, { type, url: urlResolve1 }, validateArgs);
+
+        let err = '';
+        try { await hook.run(urlResolve1, {}, {}) }
+        catch (e) { err = e?.message }
+
+        assert.equal(validateArgs.mock.callCount(), 0);
+        assert.doesNotMatch(err, /ERR_INVALID_RETURN_VALUE/);
+      });
+
+      it('should validate `context` when there IS a previous hook', () => {
+        const validateArgs = mock.fn(mock_validateArgs);
+        const prevHook = new Hook(firstResolve, { type, url: urlResolve1 });
+        const thisHook = new Hook(secondResolve, { type, url: urlResolve2 }, validateArgs);
+
+        prevHook.next = thisHook;
+        thisHook.prev = prevHook;
+
+        return assert.rejects(async () => thisHook.run(urlResolve1, Array(), {}), (err) => {
+          assert.equal(validateArgs.mock.callCount(), 1);
+          assert.match(err.message, new RegExp(urlResolve1));
+          assert.match(err.message, /'context'/);
+
+          return true; // because reasons
+        });
+      });
+
+      it('should mark the chain finished when there is no `next`', async () => {
+        const hook = new Hook(firstResolve, { type, url: urlResolve1 });
+        const meta = { chainFinished: false };
+
+        await hook.run(urlResolve1, null, meta);
+
+        assert.equal(meta.chainFinished, true);
+      });
+
+      it('should prefer context values provided by hook', async () => {
+        const hook = new Hook(firstResolve, { type, url: urlResolve1 });
+        const ctx = { foo: 'bar' };
+        const meta = { context: {} };
+
+        await hook.run(urlResolve1, ctx, meta);
+
+        assert.deepEqual(meta.context, ctx);
+      });
+
+      it('should NOT throw on valid hook output', async () => {
+        const hook = new Hook(firstResolve, { type, url: urlResolve1 });
+
+        return assert.doesNotReject(async() => await hook.run(urlResolve1, null, {}));
+      });
+
+      it('should throw on invalid hook output', async () => {
+        const hook = new Hook(secondResolve, { type, url: urlResolve2 });
+
+        return assert.rejects(async() => await hook.run(urlResolve1, null, {}), (err) => {
+          assert.match(err.message, /an object/);
+          assert.match(err.message, new RegExp(hook.errIdentifier));
+
+          return true; // reasons
+        });
+      });
+
+      it('should mark the chain short-circuited when the hook signals a shortcircuit', async () => {
+        const hook = new Hook(() => ({ shortCircuit: true }), { type, url: urlResolve1 });
+        const meta = {};
+
+        await hook.run(urlResolve1, null, meta);
+
+        assert.equal(meta.shortCircuited, true);
       });
     });
   });
