@@ -23,8 +23,6 @@ describe('Loader Hooks', { concurrency: !process.env.TEST_PARALLEL }, () => {
   const urlResolve3 = 'test/resolve/3';
 
   describe('Hooks', { concurrency: !process.env.TEST_PARALLEL }, () => {
-    it.todo('should initialise with default hooks');
-
     describe('addCustomLoader()', () => {
       const parentURL = 'file:///test/main.mjs';
 
@@ -82,9 +80,131 @@ describe('Loader Hooks', { concurrency: !process.env.TEST_PARALLEL }, () => {
       });
     });
 
-    describe('resolve()', () => {});
+    describe('resolve()', () => {
+      it('should pass the happy-path of a default chain (cjs)', async () => {
+        const hooks = new Hooks();
 
-    describe('load()', () => {});
+        const cjsSpecifier = path.resolve(fixtures.path('/es-modules/cjs.js'));
+        const cjsResolution = await hooks.resolve(
+          cjsSpecifier,
+          undefined,
+        );
+        assert.deepEqual(cjsResolution, {
+          __proto__: null,
+          format: 'commonjs',
+          importAttributes: undefined,
+          url: pathToFileURL(cjsSpecifier).href,
+        });
+      });
+
+      it('should pass the happy-path of a default chain (esm)', async () => {
+        const hooks = new Hooks();
+
+        const esmSpecifier = path.resolve(fixtures.path('/es-modules/import-esm.mjs'));
+        const esmResolution = await hooks.resolve(
+          esmSpecifier,
+          undefined,
+        );
+        assert.deepEqual(esmResolution, {
+          __proto__: null,
+          format: 'module',
+          importAttributes: undefined,
+          url: pathToFileURL(esmSpecifier).href,
+        });
+      });
+
+      it('should respect a short-circuiting hook', async () => {
+        const hooks = new Hooks();
+        const format = 'module';
+        const url = 'file:///tmp/42.js';
+
+        hooks.addCustomLoader(
+          'file:///tmp/short-circuiting-resolve.mjs',
+          {
+            resolve: async function shortCircuitedResolve(specifier) {
+              return {
+                __proto__: null,
+                shortCircuit: true,
+                format,
+                url,
+              };
+            },
+          }
+        );
+
+        // This specifier would fail if shortCircuit wasn't working: defaulResolve would throw
+        // module not found
+        const resolution = await hooks.resolve('foo');
+
+        assert.deepEqual(resolution, {
+          __proto__: null,
+          format,
+          importAttributes: undefined,
+          url,
+        });
+      });
+    });
+
+    describe('load()', () => {
+      it('should pass the happy-path of a default chain (cjs)', async () => {
+        const hooks = new Hooks();
+
+        const cjsURL = pathToFileURL(path.resolve(fixtures.path('/es-modules/cjs.js'))).href;
+        const cjsLoaded = await hooks.load(cjsURL);
+
+        assert.deepEqual(cjsLoaded, {
+          __proto__: null,
+          format: 'commonjs',
+          responseURL: cjsURL,
+          source: null,
+        });
+      });
+
+      it('should pass the happy-path of a default chain (esm)', async () => {
+        const hooks = new Hooks();
+
+        const esmURL = pathToFileURL(path.resolve(fixtures.path('/es-modules/import-esm.mjs'))).href;
+        const esmLoaded = await hooks.load(esmURL);
+
+        assert.deepEqual(esmLoaded, {
+          __proto__: null,
+          format: 'module',
+          responseURL: esmURL,
+          source: Buffer([105,109,112,111,114,116,32,123,32,104,101,108,108,111,32,125,32,102,114,111,109,32,39,46,47,105,109,112,111,114,116,101,100,45,101,115,109,46,109,106,115,39,59,10,99,111,110,115,111,108,101,46,108,111,103,40,104,101,108,108,111,41,59,10,101,120,112,111,114,116,32,123,32,104,101,108,108,111,32,125,59,10]),
+        });
+      });
+
+      it('should respect a short-circuiting hook', async () => {
+        const hooks = new Hooks();
+        const format = 'module';
+        const responseURL = 'file:///tmp/42.js';
+        const source = '42';
+
+        hooks.addCustomLoader(
+          'file:///tmp/short-circuiting-load.mjs',
+          {
+            load: async function shortCircuitedLoad(url, { format }) {
+              return {
+                shortCircuit: true,
+                format,
+                responseURL,
+                source,
+              };
+            },
+          }
+        );
+
+        // This "url" would fail if shortCircuit wasn't working: defaulLoad would throw invalid URL
+        const loaded = await hooks.load('foo', { format })
+
+        assert.deepEqual(loaded, {
+          __proto__: null,
+          format,
+          responseURL,
+          source,
+        });
+      });
+    });
   });
 
   describe('Chain', { concurrency: !process.env.TEST_PARALLEL }, () => {
