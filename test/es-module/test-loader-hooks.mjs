@@ -113,24 +113,74 @@ describe('Loader Hooks', { concurrency: !process.env.TEST_PARALLEL }, () => {
         });
       });
 
+      it('should pass the happy-path of a customised chain', async () => {
+        const u = '42';
+        const hooks = new Hooks();
+
+        const resolve42Spy = mock.fn(async function resolve42(specifier, { format }, next) {
+          // Avoid error we don't care about (and don't want to involve shortCircuit)
+          await next(specifier); // Discard output
+
+          return {
+            format,
+            url: u,
+          };
+        });
+        hooks.addCustomLoader('file:///tmp/42-resolve.mjs', {
+          resolve: resolve42Spy,
+        });
+
+        const resolvePassthruSpy = mock.fn(async function resolvePassthru(specifier, { format }, next) {
+          const { url } = await next(specifier);
+
+          assert.equal(url, u);
+
+          return {
+            format,
+            url: specifier,
+          };
+        });
+        hooks.addCustomLoader('file:///tmp/passthru-resolve.mjs', {
+          resolve: resolvePassthruSpy,
+        });
+
+        const specifier = path.resolve(fixtures.path('/es-modules/import-esm.mjs'));
+        const resolution = await hooks.resolve(
+          specifier,
+          undefined,
+        );
+
+        assert.equal(
+          resolve42Spy.mock.callCount(),
+          // 1st: resolvePassthru explicitly calls it.
+          // 2nd: chain continues after resolvePassthru runs (because resolvePassthru didn't
+          // short-circuit)
+          2,
+        );
+        assert.equal(resolvePassthruSpy.mock.callCount(), 1);
+
+        assert.deepEqual(resolution, {
+          __proto__: null,
+          format: 'module',
+          importAttributes: undefined,
+          url: pathToFileURL(specifier).href,
+        });
+      });
+
       it('should respect a short-circuiting hook', async () => {
         const hooks = new Hooks();
         const format = 'module';
         const url = 'file:///tmp/42.js';
 
-        hooks.addCustomLoader(
-          'file:///tmp/short-circuiting-resolve.mjs',
-          {
-            resolve: async function shortCircuitedResolve(specifier) {
-              return {
-                __proto__: null,
-                shortCircuit: true,
-                format,
-                url,
-              };
-            },
-          }
-        );
+        hooks.addCustomLoader('file:///tmp/short-circuiting-resolve.mjs', {
+          resolve: async function shortCircuitedResolve() {
+            return {
+              shortCircuit: true,
+              format,
+              url,
+            };
+          },
+        });
 
         // This specifier would fail if shortCircuit wasn't working: defaulResolve would throw
         // module not found
@@ -180,19 +230,16 @@ describe('Loader Hooks', { concurrency: !process.env.TEST_PARALLEL }, () => {
         const responseURL = 'file:///tmp/42.js';
         const source = '42';
 
-        hooks.addCustomLoader(
-          'file:///tmp/short-circuiting-load.mjs',
-          {
-            load: async function shortCircuitedLoad(url, { format }) {
-              return {
-                shortCircuit: true,
-                format,
-                responseURL,
-                source,
-              };
-            },
-          }
-        );
+        hooks.addCustomLoader('file:///tmp/short-circuiting-load.mjs', {
+          load: async function shortCircuitedLoad(url, { format }) {
+            return {
+              shortCircuit: true,
+              format,
+              responseURL,
+              source,
+            };
+          },
+        });
 
         // This "url" would fail if shortCircuit wasn't working: defaulLoad would throw invalid URL
         const loaded = await hooks.load('foo', { format })
