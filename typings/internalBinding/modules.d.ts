@@ -26,4 +26,5 @@ export interface ModulesBinding {
   getNearestParentPackageJSONType(path: string): PackageConfig['type']
   getPackageScopeConfig(path: string): SerializedPackageConfig | undefined
   getPackageJSONScripts(): string | undefined
+  findNearestPackageJSON(origin: URL['pathname']): URL['pathname'] | undefined
 }
